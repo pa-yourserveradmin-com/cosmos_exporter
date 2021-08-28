@@ -1,0 +1,348 @@
+#!/usr/bin/env python3
+
+from prometheus_client import start_http_server, Gauge, Summary
+from time import sleep
+import argparse
+import requests
+import logging
+
+
+BOND_STATUSES = {
+    'BOND_STATUS_BONDED': 0,
+    'BOND_STATUS_UNBONDING': 1,
+    'BOND_STATUS_UNBONDED': 2,
+}
+
+balances_available_total = Gauge(
+    name='balances_available_total',
+    documentation='Total balances available to use across all balances',
+    labelnames=[
+        'delegator_address',
+        'chain_id',
+    ]
+)
+
+commissions_available = Gauge(
+    name='commissions_available',
+    documentation='Commissions available to withdraw from validators',
+    labelnames=[
+        'validator_address',
+        'chain_id',
+    ]
+)
+
+proposer_priority = Gauge(
+    name='proposer_priority',
+    documentation='The current validator proposer priority',
+    labelnames=[
+        'validator_address',
+        'chain_id',
+    ]
+)
+
+proposer_rank = Gauge(
+    name='proposer_rank',
+    documentation='The current validator proposer rank across all active validators',
+    labelnames=[
+        'validator_address',
+        'chain_id',
+    ]
+)
+
+rewards_available = Gauge(
+    name='rewards_available',
+    documentation='Rewards available to withdraw from validators',
+    labelnames=[
+        'delegator_address',
+        'validator_address',
+        'chain_id',
+    ]
+)
+
+rewards_available_total = Gauge(
+    name='rewards_available_total',
+    documentation='Total rewards available to withdraw from all validators',
+    labelnames=[
+        'delegator_address',
+        'chain_id',
+    ]
+)
+
+# NOTE: Information to tune metrics update and scrape intervals based on total metrics collection duration.
+total_processing_seconds = Summary('total_processing_seconds', 'Time spent to calculate all metric')
+
+validator_jailed = Gauge(
+    name='validator_jailed',
+    documentation='The current validator jailed status (0 - unjailed, 1 - jailed, 2 - tombstoned)',
+    labelnames=[
+        'validator_address',
+        'chain_id',
+    ]
+)
+
+validator_rank = Gauge(
+    name='validator_rank',
+    documentation='The current validator rank across active validators',
+    labelnames=[
+        'validator_address',
+        'chain_id',
+    ]
+)
+
+validator_status = Gauge(
+    name='validator_status',
+    documentation='The current validator status (0 - bonded, 1 - unbonding, 2 - unbonded)',
+    labelnames=[
+        'validator_address',
+        'chain_id',
+    ]
+)
+
+validator_uptime = Gauge(
+    name='validator_uptime',
+    documentation='The current validator uptime',
+    labelnames=[
+        'validator_address',
+        'chain_id',
+    ]
+)
+
+# NOTE: This is a kind of debug information needed to check how many blocks we can check during single scrape interval.
+uptime_processing_seconds = Summary('uptime_processing_seconds', 'Time spent to calculate uptime metric')
+
+
+class CosmosRest(object):
+
+    validators_total = 0
+
+    def __init__(self, rest_url: str = 'http://localhost:1317', rpc_url: str = 'http://127.0.0.1:26657',
+                 version: str = 'v1beta1'):
+        self.session = requests.Session()
+        self.rest_url = rest_url
+        self.rpc_url = rpc_url
+        self.version = version
+
+    def balances(self, delegator_address) -> dict:
+        return self.session.get(
+            url=f'{self.rest_url}/bank/balances/{delegator_address}'
+        ).json()['result'][0]
+
+    def block(self, height: int) -> dict:
+        return self.session.get(
+            url=f'{self.rpc_url}/block',
+            params={
+                'height': height,
+            }
+        ).json()
+
+    def blocks(self, height: str = 'latest') -> dict:
+        return self.session.get(
+            url=f'{self.rest_url}/cosmos/base/tendermint/{self.version}/blocks/{height}'
+        ).json()
+
+    def commission(self, validator_address):
+        return self.session.get(
+            url=f'{self.rest_url}/cosmos/distribution/{self.version}/validators/{validator_address}/commission'
+        ).json()['commission']['commission']
+
+    def rewards(self, delegator_address) -> dict:
+        return self.session.get(
+            url=f'{self.rest_url}/cosmos/distribution/{self.version}/delegators/{delegator_address}/rewards'
+        ).json()
+
+    def signing_infos(self, consensus_address: str) -> dict:
+        return self.session.get(
+            url=f'{self.rest_url}/cosmos/slashing/{self.version}/signing_infos/{consensus_address}'
+        ).json()
+
+    def status(self) -> dict:
+        return self.session.get(
+            url=f'{self.rpc_url}/status'
+        ).json()['result']
+
+    # TODO: Replace this function with SDK RPC query once https://github.com/cosmos/cosmos-sdk/pull/8567 will be done.
+    # TODO: Use block_height to make sure queries will be done against the same block height.
+    def validators_set(self, page: int = 1, per_page: int = 100) -> list:
+        validators = list()
+        while True:
+            response = self.session.post(
+                url=f'{self.rpc_url}',
+                # TODO: In case of further integration, think about merging the dict with default keys and custom.
+                json={
+                    "jsonrpc": "2.0",
+                    "id": 0,
+                    "method": "validators",
+                    "params": {
+                        "page": f'{page}',
+                        "per_page": f'{per_page}'
+                    }
+                }
+            ).json()
+            validators.extend(response['result']['validators'])
+            if len(validators) == int(response['result']['total']):
+                break
+            page = page + 1
+        return validators
+
+    def validators(self, pagination_limit: int = validators_total) -> dict:
+        response = self.session.get(
+            url=f'{self.rest_url}/cosmos/staking/{self.version}/validators',
+            params={
+                'pagination.limit': pagination_limit,
+                'pagination.count_total': True,
+            }
+        )
+        if len(response.json()['validators']) < int(response.json()['pagination']['total']):
+            self.validators_total = int(response.json()['pagination']['total'])
+            return self.validators(pagination_limit=self.validators_total)
+        return response.json()['validators']
+
+
+class Validator(object):
+
+    def __init__(self, validator_address: str):
+        for validator in rest.validators():
+            if validator['operator_address'] == validator_address:
+                self.info = validator
+        self.validator_address = validator_address
+
+    def commissions(self, total: float = 0) -> float:
+        for commission in rest.commission(validator_address=self.validator_address):
+            total += float(commission['amount'])
+        return total / 10 ** 6
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--consensus_address', help='The validator consensus address to use.', type=str, required=True)
+    parser.add_argument(
+        '--delegator_address', help='The delegator account address to check stats.', type=str, required=True,
+    )
+    parser.add_argument('--executable', help='The executable file name or path to use.', type=str, required=True)
+    parser.add_argument('--interval', help='Seconds between metrics refresh.', type=float, default=5.0)
+    parser.add_argument('--validator_address', help='The validator address to check stats.', type=str, required=True)
+    return parser
+
+
+def priority(address: str, chain_id: str, validators: list):
+    validators = sorted(validators, key=lambda k: int(k['proposer_priority']), reverse=True)
+    for validator in validators:
+        if validator['address'] == address:
+            proposer_priority.labels(
+                validator_address=known_args.validator_address,
+                chain_id=chain_id,
+            ).set(validator['proposer_priority'])
+            proposer_rank.labels(
+                validator_address=known_args.validator_address,
+                chain_id=chain_id,
+            ).set(validators.index(validator) + 1)
+            break
+
+
+def rank(address: str, chain_id: str, validators: list):
+    validators = sorted(validators, key=lambda k: int(k['voting_power']), reverse=True)
+    for validator in validators:
+        if validator['address'] == address:
+            validator_rank.labels(
+                validator_address=known_args.validator_address,
+                chain_id=chain_id,
+            ).set(validators.index(validator) + 1)
+            break
+
+
+@uptime_processing_seconds.time()
+def uptime(address: str, last_commit_height: int, rounds: int = 100) -> float:
+    signatures: int = 0
+    for height in range(last_commit_height - rounds, last_commit_height):
+        for signature in rest.block(height=height)['result']['block']['last_commit']['signatures']:
+            if signature['validator_address'] and signature['validator_address'] == address:
+                signatures = signatures + 1
+                break
+    return 100.0 * signatures / rounds
+
+
+@total_processing_seconds.time()
+def metrics(interval) -> float:
+    logging.info('start')
+    val = Validator(validator_address=known_args.validator_address)
+    status = rest.status()
+    validator_jailed.labels(
+        validator_address=val.validator_address,
+        chain_id=status['node_info']['network'],
+    ).set(int(val.info['jailed']))
+    validator_status.labels(
+        validator_address=val.validator_address,
+        chain_id=status['node_info']['network'],
+    ).set(BOND_STATUSES[val.info['status']])
+    balances_available_total.labels(
+        delegator_address=known_args.delegator_address,
+        chain_id=status['node_info']['network'],
+    ).set(float(rest.balances(delegator_address=known_args.delegator_address)['amount']) / 10 ** 6)
+    commissions_available.labels(
+        validator_address=val.validator_address,
+        chain_id=status['node_info']['network'],
+    ).set(val.commissions())
+    validators = rest.validators_set()
+    priority(
+        address=status['validator_info']['address'],
+        chain_id=status['node_info']['network'],
+        validators=validators,
+    )
+    rank(
+        address=status['validator_info']['address'],
+        chain_id=status['node_info']['network'],
+        validators=validators,
+    )
+    rewards = rest.rewards(delegator_address=known_args.delegator_address)
+    for reward in rewards['rewards']:
+        rewards_available.labels(
+            delegator_address=known_args.delegator_address,
+            validator_address=reward['validator_address'],
+            chain_id=status['node_info']['network'],
+        ).set(float(reward['reward'][0]['amount']) / 10 ** 6)
+    rewards_available_total.labels(
+        delegator_address=known_args.delegator_address,
+        chain_id=status['node_info']['network'],
+    ).set(float(rewards['total'][0]['amount']) / 10 ** 6)
+    validator_jailed.labels(
+        validator_address=known_args.validator_address,
+        chain_id=status['node_info']['network'],
+    ).set(
+        int(val.info['jailed']) if not rest.signing_infos(
+            consensus_address=known_args.consensus_address)['val_signing_info']['tombstoned']
+        else 2
+    )
+    validator_status.labels(
+        validator_address=known_args.validator_address,
+        chain_id=status['node_info']['network'],
+    ).set(BOND_STATUSES[val.info['status']])
+    validator_uptime.labels(
+        validator_address=val.validator_address,
+        chain_id=status['node_info']['network'],
+    ).set(
+        uptime(
+            address=status['validator_info']['address'],
+            last_commit_height=int(status['sync_info']['latest_block_height']) - 1,
+            rounds=100
+        )
+    )
+    logging.info('finish')
+    return interval
+
+
+def main() -> None:
+    # NOTE: I am just cannot see single and relatively large line, this is why use cascade here.
+    while True:
+        sleep(
+            metrics(
+                interval=known_args.interval,
+            )
+        )
+
+
+if __name__ == '__main__':
+    known_args, unknown_args = parse_arguments().parse_known_args()
+    logging.basicConfig(level=logging.getLevelName('INFO'))
+    start_http_server(addr='0.0.0.0', port=8000)
+    rest = CosmosRest()
+    main()
