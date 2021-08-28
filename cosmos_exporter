@@ -122,7 +122,7 @@ class CosmosRest(object):
         self.rpc_url = rpc_url
         self.version = version
 
-    def balances(self, delegator_address) -> dict:
+    def balances(self, delegator_address: str) -> dict:
         return self.session.get(
             url=f'{self.api_url}/bank/balances/{delegator_address}'
         ).json()['result'][0]
@@ -140,12 +140,12 @@ class CosmosRest(object):
             url=f'{self.api_url}/cosmos/base/tendermint/{self.version}/blocks/{height}'
         ).json()
 
-    def commission(self, validator_address):
+    def commission(self, validator_address: str) -> list:
         return self.session.get(
             url=f'{self.api_url}/cosmos/distribution/{self.version}/validators/{validator_address}/commission'
         ).json()['commission']['commission']
 
-    def rewards(self, delegator_address) -> dict:
+    def rewards(self, delegator_address: str) -> dict:
         return self.session.get(
             url=f'{self.api_url}/cosmos/distribution/{self.version}/delegators/{delegator_address}/rewards'
         ).json()
@@ -223,7 +223,7 @@ def parse_arguments():
     return parser
 
 
-def priority(address: str, chain_id: str, validators: list):
+def priority(address: str, chain_id: str, validators: list) -> None:
     validators = sorted(validators, key=lambda k: int(k['proposer_priority']), reverse=True)
     for validator in validators:
         if validator['address'] == address:
@@ -238,7 +238,7 @@ def priority(address: str, chain_id: str, validators: list):
             break
 
 
-def rank(address: str, chain_id: str, validators: list):
+def rank(address: str, chain_id: str, validators: list) -> None:
     validators = sorted(validators, key=lambda k: int(k['voting_power']), reverse=True)
     for validator in validators:
         if validator['address'] == address:
@@ -261,7 +261,7 @@ def uptime(address: str, last_commit_height: int, rounds: int = 100) -> float:
 
 
 @total_processing_seconds.time()
-def metrics(interval) -> float:
+def metrics(interval: int) -> float:
     logging.info('start')
     val = Validator(validator_address=known_args.validator_address)
     status = api.status()
@@ -326,6 +326,7 @@ def metrics(interval) -> float:
         )
     )
     logging.info('finish')
+    # TODO: Return metrics interval minus the last iteration execution time.
     return interval
 
 
