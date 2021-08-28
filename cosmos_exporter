@@ -115,16 +115,16 @@ class CosmosRest(object):
 
     validators_total = 0
 
-    def __init__(self, rest_url: str = 'http://localhost:1317', rpc_url: str = 'http://127.0.0.1:26657',
+    def __init__(self, api_url: str = 'http://localhost:1317', rpc_url: str = 'http://127.0.0.1:26657',
                  version: str = 'v1beta1'):
         self.session = requests.Session()
-        self.rest_url = rest_url
+        self.api_url = api_url
         self.rpc_url = rpc_url
         self.version = version
 
     def balances(self, delegator_address) -> dict:
         return self.session.get(
-            url=f'{self.rest_url}/bank/balances/{delegator_address}'
+            url=f'{self.api_url}/bank/balances/{delegator_address}'
         ).json()['result'][0]
 
     def block(self, height: int) -> dict:
@@ -137,22 +137,22 @@ class CosmosRest(object):
 
     def blocks(self, height: str = 'latest') -> dict:
         return self.session.get(
-            url=f'{self.rest_url}/cosmos/base/tendermint/{self.version}/blocks/{height}'
+            url=f'{self.api_url}/cosmos/base/tendermint/{self.version}/blocks/{height}'
         ).json()
 
     def commission(self, validator_address):
         return self.session.get(
-            url=f'{self.rest_url}/cosmos/distribution/{self.version}/validators/{validator_address}/commission'
+            url=f'{self.api_url}/cosmos/distribution/{self.version}/validators/{validator_address}/commission'
         ).json()['commission']['commission']
 
     def rewards(self, delegator_address) -> dict:
         return self.session.get(
-            url=f'{self.rest_url}/cosmos/distribution/{self.version}/delegators/{delegator_address}/rewards'
+            url=f'{self.api_url}/cosmos/distribution/{self.version}/delegators/{delegator_address}/rewards'
         ).json()
 
     def signing_infos(self, consensus_address: str) -> dict:
         return self.session.get(
-            url=f'{self.rest_url}/cosmos/slashing/{self.version}/signing_infos/{consensus_address}'
+            url=f'{self.api_url}/cosmos/slashing/{self.version}/signing_infos/{consensus_address}'
         ).json()
 
     def status(self) -> dict:
@@ -186,7 +186,7 @@ class CosmosRest(object):
 
     def validators(self, pagination_limit: int = validators_total) -> dict:
         response = self.session.get(
-            url=f'{self.rest_url}/cosmos/staking/{self.version}/validators',
+            url=f'{self.api_url}/cosmos/staking/{self.version}/validators',
             params={
                 'pagination.limit': pagination_limit,
                 'pagination.count_total': True,
@@ -201,13 +201,13 @@ class CosmosRest(object):
 class Validator(object):
 
     def __init__(self, validator_address: str):
-        for validator in rest.validators():
+        for validator in api.validators():
             if validator['operator_address'] == validator_address:
                 self.info = validator
         self.validator_address = validator_address
 
     def commissions(self, total: float = 0) -> float:
-        for commission in rest.commission(validator_address=self.validator_address):
+        for commission in api.commission(validator_address=self.validator_address):
             total += float(commission['amount'])
         return total / 10 ** 6
 
@@ -253,7 +253,7 @@ def rank(address: str, chain_id: str, validators: list):
 def uptime(address: str, last_commit_height: int, rounds: int = 100) -> float:
     signatures: int = 0
     for height in range(last_commit_height - rounds, last_commit_height):
-        for signature in rest.block(height=height)['result']['block']['last_commit']['signatures']:
+        for signature in api.block(height=height)['result']['block']['last_commit']['signatures']:
             if signature['validator_address'] and signature['validator_address'] == address:
                 signatures = signatures + 1
                 break
@@ -264,7 +264,7 @@ def uptime(address: str, last_commit_height: int, rounds: int = 100) -> float:
 def metrics(interval) -> float:
     logging.info('start')
     val = Validator(validator_address=known_args.validator_address)
-    status = rest.status()
+    status = api.status()
     validator_jailed.labels(
         validator_address=val.validator_address,
         chain_id=status['node_info']['network'],
@@ -276,12 +276,12 @@ def metrics(interval) -> float:
     balances_available_total.labels(
         delegator_address=known_args.delegator_address,
         chain_id=status['node_info']['network'],
-    ).set(float(rest.balances(delegator_address=known_args.delegator_address)['amount']) / 10 ** 6)
+    ).set(float(api.balances(delegator_address=known_args.delegator_address)['amount']) / 10 ** 6)
     commissions_available.labels(
         validator_address=val.validator_address,
         chain_id=status['node_info']['network'],
     ).set(val.commissions())
-    validators = rest.validators_set()
+    validators = api.validators_set()
     priority(
         address=status['validator_info']['address'],
         chain_id=status['node_info']['network'],
@@ -292,7 +292,7 @@ def metrics(interval) -> float:
         chain_id=status['node_info']['network'],
         validators=validators,
     )
-    rewards = rest.rewards(delegator_address=known_args.delegator_address)
+    rewards = api.rewards(delegator_address=known_args.delegator_address)
     for reward in rewards['rewards']:
         rewards_available.labels(
             delegator_address=known_args.delegator_address,
@@ -307,7 +307,7 @@ def metrics(interval) -> float:
         validator_address=known_args.validator_address,
         chain_id=status['node_info']['network'],
     ).set(
-        int(val.info['jailed']) if not rest.signing_infos(
+        int(val.info['jailed']) if not api.signing_infos(
             consensus_address=known_args.consensus_address)['val_signing_info']['tombstoned']
         else 2
     )
@@ -343,5 +343,5 @@ if __name__ == '__main__':
     known_args, unknown_args = parse_arguments().parse_known_args()
     logging.basicConfig(level=logging.getLevelName('INFO'))
     start_http_server(addr='0.0.0.0', port=8000)
-    rest = CosmosRest()
+    api = CosmosRest()
     main()
