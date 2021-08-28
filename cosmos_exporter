@@ -218,7 +218,6 @@ def parse_arguments():
     parser.add_argument(
         '--delegator_address', help='The delegator account address to check stats.', type=str, required=True,
     )
-    parser.add_argument('--executable', help='The executable file name or path to use.', type=str, required=True)
     parser.add_argument('--interval', help='Seconds between metrics refresh.', type=float, default=5.0)
     parser.add_argument('--validator_address', help='The validator address to check stats.', type=str, required=True)
     return parser
