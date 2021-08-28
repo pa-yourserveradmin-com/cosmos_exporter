@@ -52,11 +52,37 @@ used to invoke [cosmos_exporter](cosmos_exporter) script.
 Currently, all configuration expected to be done by using arguments passed to
 the script on start-up.
 
+### Required arguments
+
 | Option              | Description                                      | Example shell command to query values     |
 |---------------------|--------------------------------------------------|-------------------------------------------|
 | `consensus_address` | Node's tendermint validator consensus address.   | `<simd> tendermint show-address`          |
 | `delegator_address` | Reward wallet address associated with validator. | `<simd> keys show -a <wallet>`            |
 | `validator_address` | Node's validator address to query information.   | `<simd> keys show -a --bech val <wallet>` |
+
+### Optional arguments
+
+| Option                  | Description                                           |
+|-------------------------|-------------------------------------------------------|
+| `validator_hex_address` | Validator node HEX address to check uptime and ranks. |
+
+### Notable arguments
+
+The `validator_hex_address` argument needed to override automatically discovered
+node's HEX address in case the script will be connected not directly to validator
+node's API endpoint, but to a full node. This can be useful to avoid exposing API
+port on validator node and/or starting API service at all.
+
+For sure, it will be nice to be able to query it via API/RCP or calculate from the
+rest of arguments (such as `validator_address`), but currently such functional not
+implemented (yet).
+
+You can query your validator node HEX address by running the next command locally
+on the node (please adjust RPC address and port according to your configuration):
+
+```bash
+curl -s localhost:26657/status | jq -r .result.validator_info.address
+```
 
 ## Examples
 

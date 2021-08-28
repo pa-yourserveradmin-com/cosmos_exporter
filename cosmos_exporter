@@ -222,6 +222,9 @@ def parse_arguments():
     parser.add_argument('--interval', help='Seconds between metrics refresh.', type=float, default=5.0)
     parser.add_argument('--port', help='The network port to bind exporter too.', type=int, default=8000)
     parser.add_argument('--validator_address', help='The validator address to check stats.', type=str, required=True)
+    parser.add_argument(
+        '--validator_hex_address', help='The validator HEX address to check uptime and ranks.', type=str, default=str()
+    )
     return parser
 
 
@@ -267,6 +270,13 @@ def metrics(interval: int) -> float:
     logging.info('start')
     val = Validator(validator_address=known_args.validator_address)
     status = api.status()
+    # NOTE: In case the script will be connected to a full node, it is required to manually provide validator node's
+    #       address in HEX format. For sure, it will be nice to be able to query it via API/RCP or calculate from
+    #       existing arguments (such as validator_address), but currently such functional is not yet implemented.
+    # TODO: Keep tracking https://github.com/cosmos/cosmos-sdk/pull/8567 and remove validator_hex_address usage once
+    #       Cosmos SDK version will be upgraded to version containing already merged patch from this pull request.
+    if known_args.validator_hex_address:
+        status['validator_info']['address'] = known_args.validator_hex_address
     validator_jailed.labels(
         validator_address=val.validator_address,
         chain_id=status['node_info']['network'],
