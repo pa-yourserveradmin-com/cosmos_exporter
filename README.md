@@ -70,3 +70,12 @@ venv/bin/python3 cosmos_exporter \
 ```
 
 The command above will start metrics exporter on http://0.0.0.0:8000.
+
+## Grafana
+
+Example Grafana dashboard is available [here](example-testnet.json) and it can be
+imported into Grafana via UI/API. Please note that a lot of expressions currently
+depend on instance ports and `job` value configured in Prometheus scrape configuration.
+
+It should not be a huge problem to adopt example dashboard to any configuration, so
+mentioned above just a note to highlight problematic places.
