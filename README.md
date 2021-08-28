@@ -41,7 +41,7 @@ version is too old), it is recommended to install it into virtual environment:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
-pip3 install prometheus_client
+pip3 install -U -r requirements.txt
 ```
 
 Please note: in case of using virtual environment `venv/bin/python3` should be
