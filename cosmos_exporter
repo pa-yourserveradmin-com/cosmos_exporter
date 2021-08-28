@@ -218,7 +218,9 @@ def parse_arguments():
     parser.add_argument(
         '--delegator_address', help='The delegator account address to check stats.', type=str, required=True,
     )
+    parser.add_argument('--host', help='The network address to bind exporter too.', type=str, default='0.0.0.0')
     parser.add_argument('--interval', help='Seconds between metrics refresh.', type=float, default=5.0)
+    parser.add_argument('--port', help='The network port to bind exporter too.', type=int, default=8000)
     parser.add_argument('--validator_address', help='The validator address to check stats.', type=str, required=True)
     return parser
 
@@ -343,6 +345,6 @@ def main() -> None:
 if __name__ == '__main__':
     known_args, unknown_args = parse_arguments().parse_known_args()
     logging.basicConfig(level=logging.getLevelName('INFO'))
-    start_http_server(addr='0.0.0.0', port=8000)
+    start_http_server(addr=known_args.host, port=known_args.port)
     api = CosmosRest()
     main()
