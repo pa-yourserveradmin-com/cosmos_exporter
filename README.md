@@ -25,12 +25,14 @@ fetch information from a chain.
 
 ### Ubuntu
 
-In case you use modern Ubuntu distributions, Python Prometheus client package
-can be easily installed using APT:
+In case you use modern Ubuntu distributions, required Python packages can be
+easily installed using APT:
 
 ```bash
 apt update && \
-apt install python3-prometheus-client
+apt install \
+  python3-prometheus-client \
+  python3-requests
 ```
 
 ### Source
