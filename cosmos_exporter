@@ -367,9 +367,6 @@ def parse_arguments():
     parser.add_argument('--rpc_url', help='Tendermint instance RPC endpoint URL', type=str,
                         default='http://127.0.0.1:26657')
     parser.add_argument('--validator_address', help='The validator address to query stats', type=str, required=True)
-    parser.add_argument(
-        '--validator_hex_address', help='The validator HEX address to query uptime and ranks', type=str, default=str()
-    )
     parser.add_argument('--uptime_window', help='Number of blocks to calculate node uptime', type=int, default=100)
     return parser
 
@@ -416,13 +413,6 @@ def metrics(interval: int) -> float:
     logging.info('start')
     val = Validator(validator_address=known_args.validator_address)
     status = api.status()
-    # NOTE: In case the script will be connected to a full node, it is required to manually provide validator node's
-    #       address in HEX format. For sure, it will be nice to be able to query it via API/RCP or calculate from
-    #       existing arguments (such as validator_address), but currently such functional is not yet implemented.
-    # TODO: Keep tracking https://github.com/cosmos/cosmos-sdk/pull/8567 and remove validator_hex_address usage once
-    #       Cosmos SDK version will be upgraded to version containing already merged patch from this pull request.
-    if known_args.validator_hex_address:
-        status['validator_info']['address'] = known_args.validator_hex_address
     validator_jailed.labels(
         validator_address=val.validator_address,
         chain_id=status['node_info']['network'],
@@ -441,12 +431,12 @@ def metrics(interval: int) -> float:
     ).set(val.commissions())
     validators = api.validators_set()
     priority(
-        address=status['validator_info']['address'],
+        address=validator_hex_address,
         chain_id=status['node_info']['network'],
         validators=validators,
     )
     rank(
-        address=status['validator_info']['address'],
+        address=validator_hex_address,
         chain_id=status['node_info']['network'],
         validators=validators,
     )
@@ -478,7 +468,7 @@ def metrics(interval: int) -> float:
         chain_id=status['node_info']['network'],
     ).set(
         uptime(
-            address=status['validator_info']['address'],
+            address=validator_hex_address,
             last_commit_height=int(status['sync_info']['latest_block_height']) - 1,
             uptime_window=known_args.uptime_window,
         )
@@ -502,6 +492,11 @@ if __name__ == '__main__':
     known_args, unknown_args = parse_arguments().parse_known_args()
     logging.basicConfig(level=logging.getLevelName(known_args.log_level.upper()))
     start_http_server(addr=known_args.host, port=known_args.port)
+    # TODO: Keep tracking https://github.com/cosmos/cosmos-sdk/pull/8567 and remove use of public key hash in HEX format
+    validator_hex_address = addr_bech32_to_pubkeyhash(
+        bech=known_args.consensus_address,
+        as_hex=True
+    ).upper()
     api = CosmosRest(
         api_url=known_args.api_url,
         rpc_url=known_args.rpc_url,
