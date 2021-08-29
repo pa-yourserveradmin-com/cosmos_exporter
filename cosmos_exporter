@@ -167,7 +167,7 @@ class CosmosRest(object):
         while True:
             response = self.session.post(
                 url=f'{self.rpc_url}',
-                # TODO: In case of further integration, think about merging the dict with default keys and custom.
+                # TODO: In case of further integration, think about merging the dict with default and custom keys.
                 json={
                     "jsonrpc": "2.0",
                     "id": 0,
@@ -214,16 +214,23 @@ class Validator(object):
 
 def parse_arguments():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--consensus_address', help='The validator consensus address to use.', type=str, required=True)
+    parser.add_argument('--consensus_address', help='The validator consensus address to use', type=str, required=True)
     parser.add_argument(
-        '--delegator_address', help='The delegator account address to check stats.', type=str, required=True,
+        '--delegator_address', help='The delegator account address to check stats', type=str, required=True,
     )
-    parser.add_argument('--host', help='The network address to bind exporter too.', type=str, default='0.0.0.0')
+    parser.add_argument('--host', help='The network address to bind exporter too', type=str, default='0.0.0.0')
     parser.add_argument('--interval', help='Seconds between metrics refresh.', type=float, default=5.0)
-    parser.add_argument('--port', help='The network port to bind exporter too.', type=int, default=8000)
-    parser.add_argument('--validator_address', help='The validator address to check stats.', type=str, required=True)
     parser.add_argument(
-        '--validator_hex_address', help='The validator HEX address to check uptime and ranks.', type=str, default=str()
+        '--log_level', help='The logging level to use (default "info")', type=str, default='info', choices=[
+            'warning',
+            'debug',
+            'info',
+        ]
+    )
+    parser.add_argument('--port', help='The network port to bind exporter too', type=int, default=8000)
+    parser.add_argument('--validator_address', help='The validator address to check stats', type=str, required=True)
+    parser.add_argument(
+        '--validator_hex_address', help='The validator HEX address to check uptime and ranks', type=str, default=str()
     )
     return parser
 
@@ -354,7 +361,7 @@ def main() -> None:
 
 if __name__ == '__main__':
     known_args, unknown_args = parse_arguments().parse_known_args()
-    logging.basicConfig(level=logging.getLevelName('INFO'))
+    logging.basicConfig(level=logging.getLevelName(known_args.log_level.upper()))
     start_http_server(addr=known_args.host, port=known_args.port)
     api = CosmosRest()
     main()
