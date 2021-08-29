@@ -33,5 +33,5 @@ setup(
         'cosmos_exporter'
     ],
     url='https://github.com/pa-yourserveradmin-com/cosmos_exporter',
-    version='0.1.0',
+    version='0.1.1',
 )
