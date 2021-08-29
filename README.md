@@ -23,10 +23,26 @@ and any other process manager which supports process restart on failures.
 
 ## Requirements
 
-1. Operating system with Python 3.5+ installed.
+1. Runtime environment with Python 3.5+ installed.
 2. Basic understanding of what is going on.
 
-## Dependencies
+## Usage
+
+### Containers
+
+Container images built are available to pull them from Github Container registry.
+This could be the easiest, and the fastest way to start exporting validator metrics
+especially in case you already have required infrastructure and/or tools.
+
+Please see the list of actual image tags by the [link][images].
+
+Example usage:
+
+```bash
+podman run --rm ghcr.io/pa-yourserveradmin-com/cosmos_exporter:latest --help
+```
+
+_Feel free to replace `podman` with `docker` in case you more familiar with the last one._
 
 ### Ubuntu
 
@@ -57,19 +73,6 @@ pip3 install -U -r requirements.txt
 
 Please note: in case of using virtual environment `venv/bin/python3` should be
 used to invoke [cosmos_exporter](cosmos_exporter) script.
-
-### Containers
-
-Example [Dockerfile](Dockerfile) is provided to show how to quickly build container
-image with all dependencies installed and ready to use:
-
-```bash
-git clone https://github.com/pa-yourserveradmin-com/cosmos_exporter.git
-pushd cosmos_exporter
-podman build -t localhost/cosmos_exporters:0.1.0 .
-```
-
-_Feel free to replace `podman` with `docker` in case you more familiar with the last one._
 
 ## Configuration
 
@@ -110,6 +113,22 @@ curl -s localhost:26657/status | jq -r .result.validator_info.address
 
 ## Examples
 
+### Running as container
+
+Example of script run using pre-build container image with automatic
+restart and host networking (to simplify the example):
+
+```bash
+podman run --network=host --restart=always ghcr.io/pa-yourserveradmin-com/cosmos_exporter:latest \
+  --consensus_address=tkivalcons158ms2lcacdtu78270uef9ayth7lfkuvxq4lnms \
+  --delegator_address=tki1mw7kd8e4t44q8jklrhdne8uyqmlmmxpw07csmc \
+  --validator_address=tkivaloper1mw7kd8e4t44q8jklrhdne8uyqmlmmxpwu7snym
+```
+
+_Feel free to replace `podman` with `docker` in case you more familiar with the last one._
+
+### Running from sources
+
 Example of script run from source and using Python virtual environment:
 
 ```bash
@@ -129,3 +148,5 @@ depend on instance ports and `job` value configured in Prometheus scrape configu
 
 It should not be a huge problem to adopt example dashboard to any configuration, so
 mentioned above just a note to highlight problematic places.
+
+[images]: https://github.com/pa-yourserveradmin-com/cosmos_exporter/pkgs/container/cosmos_exporter
