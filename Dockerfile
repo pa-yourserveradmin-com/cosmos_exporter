@@ -4,4 +4,4 @@ COPY . /build
 WORKDIR /build
 RUN python3 setup.py install
 
-ENTRYPOINT cosmos_exporter
+ENTRYPOINT ["cosmos_exporter"]
