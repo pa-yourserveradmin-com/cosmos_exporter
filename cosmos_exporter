@@ -192,9 +192,11 @@ class CosmosRest(object):
                 'pagination.count_total': True,
             }
         )
-        if len(response.json()['validators']) < int(response.json()['pagination']['total']):
-            self.validators_total = int(response.json()['pagination']['total'])
-            return self.validators(pagination_limit=self.validators_total)
+        self.validators_total = int(response.json()['pagination']['total'])
+        if len(response.json()['validators']) < self.validators_total:
+            return self.validators(
+                pagination_limit=self.validators_total
+            )
         return response.json()['validators']
 
 

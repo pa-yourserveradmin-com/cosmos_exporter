@@ -30,9 +30,10 @@ and any other process manager which supports process restart on failures.
 
 ### Containers
 
-Container images built are available to pull them from Github Container registry.
-This could be the easiest, and the fastest way to start exporting validator metrics
-especially in case you already have required infrastructure and/or tools.
+Container images are available to pull them from Github Container registry.
+This could be the easiest, and the fastest way to start exporting validator
+metrics  especially in case you already have required infrastructure and/or
+tools.
 
 Please see the list of actual image tags by the [link][images].
 
@@ -56,6 +57,7 @@ apt update && \
 apt install \
   python3-prometheus-client \
   python3-requests
+./cosmos_exporter --help
 ```
 
 ### Source
@@ -69,6 +71,7 @@ pushd cosmos_exporter
 python3 -m venv venv
 source venv/bin/activate
 pip3 install -U -r requirements.txt
+./cosmos_exporter --help
 ```
 
 Please note: in case of using virtual environment `venv/bin/python3` should be
@@ -127,7 +130,7 @@ podman run --network=host --restart=always ghcr.io/pa-yourserveradmin-com/cosmos
 
 _Feel free to replace `podman` with `docker` in case you more familiar with the last one._
 
-### Running from sources
+### Running from source
 
 Example of script run from source and using Python virtual environment:
 
@@ -144,7 +147,7 @@ The command above will start metrics exporter on http://0.0.0.0:8000.
 
 Example Grafana dashboard is available [here](example-testnet.json) and it can be
 imported into Grafana via UI/API. Please note that a lot of expressions currently
-depend on instance ports and `job` value configured in Prometheus scrape configuration.
+depend on instance ports and `job` values set in Prometheus scrape settings.
 
 It should not be a huge problem to adopt example dashboard to any configuration, so
 mentioned above just a note to highlight problematic places.
