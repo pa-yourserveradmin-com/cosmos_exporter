@@ -34,6 +34,8 @@ In case you use modern Ubuntu distributions, required Python packages can be
 easily installed using APT:
 
 ```bash
+git clone https://github.com/pa-yourserveradmin-com/cosmos_exporter.git
+pushd cosmos_exporter
 apt update && \
 apt install \
   python3-prometheus-client \
@@ -46,6 +48,8 @@ In case your system lacks packaged Python Prometheus client (or in case packaged
 version is too old), it is recommended to install it into virtual environment:
 
 ```bash
+git clone https://github.com/pa-yourserveradmin-com/cosmos_exporter.git
+pushd cosmos_exporter
 python3 -m venv venv
 source venv/bin/activate
 pip3 install -U -r requirements.txt
@@ -53,6 +57,19 @@ pip3 install -U -r requirements.txt
 
 Please note: in case of using virtual environment `venv/bin/python3` should be
 used to invoke [cosmos_exporter](cosmos_exporter) script.
+
+### Containers
+
+Example [Dockerfile](Dockerfile) is provided to show how to quickly build container
+image with all dependencies installed and ready to use:
+
+```bash
+git clone https://github.com/pa-yourserveradmin-com/cosmos_exporter.git
+pushd cosmos_exporter
+podman build -t localhost/cosmos_exporters:0.1.0 .
+```
+
+_Feel free to replace `podman` with `docker` in case you more familiar with the last one._
 
 ## Configuration
 
@@ -93,7 +110,7 @@ curl -s localhost:26657/status | jq -r .result.validator_info.address
 
 ## Examples
 
-Example of script run using Python virtual environment:
+Example of script run from source and using Python virtual environment:
 
 ```bash
 venv/bin/python3 cosmos_exporter \

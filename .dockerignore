@@ -1,0 +1,4 @@
+.*
+!cosmos_exporter
+!requirements.txt
+!setup.py
