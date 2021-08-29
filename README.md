@@ -11,10 +11,15 @@ options can be changed at any time.
 
 ## Limitations
 
-Currently, the script expected to be executed directly on validator machine.
-This is not a requirement and will be changed soon, to make it possible to
-run script remotely and use either validator or full node RPC endpoints to
-fetch information from a chain.
+Currently, no exceptions handled, so script can fail and exit depending on
+the responses provided by API and RPC endpoints, the same as depending on
+the endpoints health.
+
+Exceptions handling planned, but still: recommended way to run the script
+is to use `systemd` unit with automatic restart in case of failures.
+
+In case `systemd` is not available, consider to use `monit`, `supervisord`
+and any other process manager which supports process restart on failures.
 
 ## Requirements
 
