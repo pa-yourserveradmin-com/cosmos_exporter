@@ -13,6 +13,17 @@ BOND_STATUSES = {
     'BOND_STATUS_UNBONDED': 2,
 }
 
+code_strings = {
+    2: b'01',
+    3: b' ,.',
+    10: b'0123456789',
+    16: b'0123456789abcdef',
+    32: b'abcdefghijklmnopqrstuvwxyz234567',
+    58: b'123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz',
+    256: b''.join([bytes((csx,)) for csx in range(256)]),
+    'bech32': b'qpzry9x8gf2tvdw0s3jn54khce6mua7l'
+}
+
 balances_available_total = Gauge(
     name='balances_available_total',
     documentation='Total balances available to use across all balances',
@@ -212,6 +223,128 @@ class Validator(object):
         for commission in api.commission(validator_address=self.validator_address):
             total += float(commission['amount'])
         return total / 10 ** 6
+
+
+def _bech32_polymod(values):
+    """
+    Internal function that computes the Bech32 checksum
+
+    Source: https://github.com/1200wd/bitcoinlib/blob/9507fbd035263cba5904bf0fdbb7f84bf549ffc0/bitcoinlib/encoding.py
+    """
+    generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3]
+    chk = 1
+    for value in values:
+        top = chk >> 25
+        chk = (chk & 0x1ffffff) << 5 ^ value
+        for i in range(5):
+            chk ^= generator[i] if ((top >> i) & 1) else 0
+    return chk
+
+
+def addr_bech32_to_pubkeyhash(bech, prefix=None, include_witver=False, as_hex=False):
+    """
+    Decode bech32 / segwit address to public key hash
+
+    Source: https://github.com/1200wd/bitcoinlib/blob/9507fbd035263cba5904bf0fdbb7f84bf549ffc0/bitcoinlib/encoding.py
+
+    >>> addr_bech32_to_pubkeyhash('bc1qy8qmc6262m68ny0ftlexs4h9paud8sgce3sf84', as_hex=True)
+    '21c1bc695a56f47991e95ff26856e50f78d3c118'
+
+    Validate the bech32 string, and determine HRP and data. Only standard data size of 20 and 32 bytes are excepted
+
+    :param bech: Bech32 address to convert
+    :type bech: str
+    :param prefix: Address prefix called Human-readable part. Default is None and tries to derive prefix, for bitcoin specify 'bc' and for bitcoin testnet 'tb'
+    :type prefix: str
+    :param include_witver: Include witness version in output? Default is False
+    :type include_witver: bool
+    :param as_hex: Output public key hash as hex or bytes. Default is False
+    :type as_hex: bool
+
+    :return str: Public Key Hash
+    """
+    if (any(ord(x) < 33 or ord(x) > 126 for x in bech)) or (bech.lower() != bech and bech.upper() != bech):
+        raise Exception("Invalid bech32 character in bech string")
+    bech = bech.lower()
+    pos = bech.rfind('1')
+    if pos < 1 or pos + 7 > len(bech) or len(bech) > 90:
+        raise Exception("Invalid bech32 string length")
+    if prefix and prefix != bech[:pos]:
+        raise Exception("Invalid bech32 address. Prefix '%s', prefix expected is '%s'" % (bech[:pos], prefix))
+    else:
+        hrp = bech[:pos]
+    data = _codestring_to_array(bech[pos + 1:], 'bech32')
+    hrp_expanded = [ord(x) >> 5 for x in hrp] + [0] + [ord(x) & 31 for x in hrp]
+    if not _bech32_polymod(hrp_expanded + data) == 1:
+        raise Exception("Bech polymod check failed")
+    data = data[:-6]
+    decoded = bytes(convertbits(data, 5, 8, pad=False))
+    if decoded is None or len(decoded) < 2 or len(decoded) > 20:
+        raise Exception("Invalid decoded data length, must be between 2 and 40")
+    if data[0] > 20:
+        raise Exception("Invalid decoded data length")
+    if data[0] == 0 and len(decoded) not in [20, 32]:
+        raise Exception("Invalid decoded data length, must be 20 or 32 bytes")
+    prefix = b''
+    if include_witver:
+        datalen = len(decoded)
+        prefix = bytes([data[0] + 0x50 if data[0] else 0, datalen])
+    if as_hex:
+        return (prefix + decoded).hex()
+    return prefix + decoded
+
+
+def _codestring_to_array(codestring, base):
+    """
+    Source: https://github.com/1200wd/bitcoinlib/blob/9507fbd035263cba5904bf0fdbb7f84bf549ffc0/bitcoinlib/encoding.py
+    """
+    codestring = bytes(codestring, 'utf8')
+    codebase = code_strings[base]
+    array = []
+    for s in codestring:
+        try:
+            array.append(codebase.index(s))
+        except ValueError:
+            raise Exception("Character '%s' not found in codebase" % s)
+    return array
+
+
+def convertbits(data, frombits, tobits, pad=True):
+    """
+    'General power-of-2 base conversion'
+
+    Source: https://github.com/sipa/bech32/tree/master/ref/python
+
+    :param data: Data values to convert
+    :type data: list
+    :param frombits: Number of bits in source data
+    :type frombits: int
+    :param tobits: Number of bits in result data
+    :type tobits: int
+    :param pad: Use padding zero's or not. Default is True
+    :type pad: bool
+
+    :return list: Converted values
+    """
+    acc = 0
+    bits = 0
+    ret = []
+    maxv = (1 << tobits) - 1
+    max_acc = (1 << (frombits + tobits - 1)) - 1
+    for value in data:
+        if value < 0 or (value >> frombits):
+            return None
+        acc = ((acc << frombits) | value) & max_acc
+        bits += frombits
+        while bits >= tobits:
+            bits -= tobits
+            ret.append((acc >> bits) & maxv)
+    if pad:
+        if bits:
+            ret.append((acc << (tobits - bits)) & maxv)
+    elif bits >= frombits or ((acc << (tobits - bits)) & maxv):
+        return None
+    return ret
 
 
 def parse_arguments():
