@@ -216,7 +216,7 @@ def parse_arguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('--consensus_address', help='The validator consensus address to use', type=str, required=True)
     parser.add_argument(
-        '--delegator_address', help='The delegator account address to check stats', type=str, required=True,
+        '--delegator_address', help='The delegator account address to query stats', type=str, required=True,
     )
     parser.add_argument('--host', help='The network address to bind exporter too', type=str, default='0.0.0.0')
     parser.add_argument('--interval', help='Seconds between metrics refresh.', type=float, default=5.0)
@@ -228,10 +228,11 @@ def parse_arguments():
         ]
     )
     parser.add_argument('--port', help='The network port to bind exporter too', type=int, default=8000)
-    parser.add_argument('--validator_address', help='The validator address to check stats', type=str, required=True)
+    parser.add_argument('--validator_address', help='The validator address to query stats', type=str, required=True)
     parser.add_argument(
-        '--validator_hex_address', help='The validator HEX address to check uptime and ranks', type=str, default=str()
+        '--validator_hex_address', help='The validator HEX address to query uptime and ranks', type=str, default=str()
     )
+    parser.add_argument('--uptime_window', help='Number of blocks to calculate node uptime', type=int, default=100)
     return parser
 
 
@@ -262,14 +263,14 @@ def rank(address: str, chain_id: str, validators: list) -> None:
 
 
 @uptime_processing_seconds.time()
-def uptime(address: str, last_commit_height: int, rounds: int = 100) -> float:
+def uptime(address: str, last_commit_height: int, uptime_window: int = 100) -> float:
     signatures: int = 0
-    for height in range(last_commit_height - rounds, last_commit_height):
+    for height in range(last_commit_height - uptime_window, last_commit_height):
         for signature in api.block(height=height)['result']['block']['last_commit']['signatures']:
             if signature['validator_address'] and signature['validator_address'] == address:
                 signatures = signatures + 1
                 break
-    return 100.0 * signatures / rounds
+    return 100.0 * signatures / uptime_window
 
 
 @total_processing_seconds.time()
@@ -341,7 +342,7 @@ def metrics(interval: int) -> float:
         uptime(
             address=status['validator_info']['address'],
             last_commit_height=int(status['sync_info']['latest_block_height']) - 1,
-            rounds=100
+            uptime_window=known_args.uptime_window,
         )
     )
     logging.info('finish')
