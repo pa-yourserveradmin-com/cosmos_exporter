@@ -281,8 +281,6 @@ def addr_bech32_to_pubkeyhash(bech, prefix=None, include_witver=False, as_hex=Fa
     decoded = bytes(convertbits(data, 5, 8, pad=False))
     if decoded is None or len(decoded) < 2 or len(decoded) > 20:
         raise Exception("Invalid decoded data length, must be between 2 and 40")
-    if data[0] > 20:
-        raise Exception("Invalid decoded data length")
     if data[0] == 0 and len(decoded) not in [20, 32]:
         raise Exception("Invalid decoded data length, must be 20 or 32 bytes")
     prefix = b''
